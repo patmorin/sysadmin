@@ -1,0 +1,123 @@
+#!/usr/bin/python
+"""A utility program that uses rsync to manage incremental backups
+
+This program uses the magic of rsync and hard links to do incremental
+backups of a file system.  It can be called 100000 times and will keep
+the latest 8 backups as well as one backup in the range [2^i,2^(i+1))
+for every integer i.  This means that, after running long enough, it 
+will store a total of 19 backups --- the 8 most recent plus whose age
+is between 8 and 15, one whose age is between 16 and 31, and so on.
+
+This is intended to be called, say, once per day by a script in
+/etc/cron.daily.  With this usage pattern, it will work for about 
+273 years.
+
+The usage is
+   prbackup <srcdir> <dstdir>
+There must be a directory named <dstdir>.XXXXX where each X is a digit
+for this to work.  You can ensure this before running the first time 
+by doing
+   mkdir -p <dstdir>.00000
+"""
+import sys
+import os
+import re
+from random import randrange
+
+def usage_and_die():
+    """Print usage message and exit."""
+    msg = "Usage: {} <srcdir> <dstdir>\n"
+    sys.stderr.write(msg.format(sys.argv[0]))
+    sys.exit(-1)
+
+def error_and_die(msg, code=-2):
+    """Print an error message and exit."""
+    sys.stderr.write(msg + "\n")
+    sys.exit(code)
+
+def age_dirs(basename, dirs):
+    """Take a list of directories and age them.
+
+    The list in dirs should be a list of directories ending in 
+    five digit numbers.  The end result is that each directory 
+    is renamed onto the its incremented number so that, for
+    example, /mydir.00023 is renamed to /mydir.00024.
+    
+    Returns the list of new directory names, in sorted order.
+    """
+    output = []
+    for d in reversed(sorted(dirs)):
+        i = int(re.match(basename+r'\.(\d+)$', d).group(1))
+        new_name = basename + ".{:05}".format(i+1)
+        os.rename(d, new_name)
+        output.append(new_name)
+    return sorted(output)
+
+def in_range(dirname, a, b):
+    """Determine if the dirname's age is in the interval [a,b)."""
+    i = int(re.match(r'.*\.(\d+)$', dirname).group(1))
+    return i >= a and i < b
+
+if __name__ == "__main__":
+    """Perform an incremental backup."""
+    if len(sys.argv) != 3:
+	usage_and_die()
+    srcdir = sys.argv[1]
+    dstdir = sys.argv[2]
+
+    # Normalize and verify source directory name.
+    srcdir = os.path.abspath(srcdir)
+    if not os.path.isdir(srcdir):
+        error_and_die("Source directory '{}' is not a directory".
+                      format(srcdir))
+
+    # Normalize destination directory name.
+    dstdir = os.path.abspath(dstdir)
+
+    # Find destination directory matches (previous backups).
+    (ddd,ddn) = os.path.split(dstdir)
+    ddp = ddn + r'\.\d{5}$'
+    dirs = [os.path.join(ddd,d) for d in os.listdir(ddd) 
+                                    if re.match(ddp, d)]
+
+    # Safety - check that all matches are actually directories.
+    for d in dirs:
+        if not os.path.isdir(d):
+            error_and_die("Found non-directory named {} - aborting!".
+                          format(d))
+
+    # Increment the age of all destination directories.
+    dirs = age_dirs(dstdir, dirs)
+
+    # This is where the new backup goes.
+    new_dst = os.path.join(ddd, ddn + ".00000")
+
+    # Make sure we have at least one existing backup.
+    if len(dirs) == 0:
+        error_and_die("Expected to find a directory with a name like\n" +
+                      "   {}{}{}.XXXXX\n".format(ddd, os.path.sep, ddn) +
+                      "but I didn't find it. Fix this by running\n"
+                      "   mkdir -p {}{}{}.00000".format(ddd, os.path.sep, ddn))
+
+    # Call rsync to do the heavy lifting.
+    link_dst = dirs[0]
+    tmp_dst = os.path.join(ddd, ddn + 
+                           ".tmp{:010}".format(randrange(1000000)))
+    rsync_cmd = 'rsync -a --delete --link-dest="{}" "{}{}" "{}"' \
+           .format(link_dst, srcdir, os.path.sep, tmp_dst)
+    os.system(rsync_cmd)
+
+    # Move this temporary directory onto its final location.
+    os.rename(tmp_dst, new_dst)
+
+    # We got this far, now we can do some cleaning up
+    for i in range(3, 30):
+        # We keep the most recent 8 versions and then one version
+        # per power of 2 after that
+        group = [d for d in dirs if in_range(d, 2**i, 2**(i+1))]
+        # We keep only the oldest version in each group
+        for j in range(len(group)-1): 
+            os.system('rm -rf "{}"'.format(group[j]))
+
+
+

@@ -1,0 +1,54 @@
+#!/bin/bash
+# Generate a status report for a server.  This particular server has RAID
+# storage that is queried with the sas2ircu-status command.  It also reports
+# on the up status of some of the machines that it knows about, and reports
+# on temperature sensors and disk usage. 
+
+function check_up { 
+    local h=$1
+    local n=5
+    count=$(ping -c 5 -q $h | grep received | awk '{print $4}')
+    if [[ $count -eq $n ]]; then
+        echo "$h is up and responding to ping ($count/$n)"
+    else
+        echo "ERROR: $h is down and only responded to $count out of $n pings"
+    fi
+}
+
+function header {
+    local title=$1
+    local sep=$2
+    echo -e "\n${title}"
+    local len=${#title}
+    for i in $(seq 1 $len); do echo -n $sep; done
+    echo
+}
+
+function h1 {
+    header "$1" =
+}
+
+function h2 {
+    header "$1" "-"
+}
+
+h1 "Status report for $HOSTNAME as of `date`"
+
+h2 "Backup server"
+check_up tao
+
+h2 "RAID status"
+sas2ircu-status
+
+h2 "Temperature sensors"
+sensors
+
+h2 "Disk space:"
+df -h
+
+h2 "Host status:"
+hosts="apastamba desargues tiny khayyam archimedes laplace coxeter plato voronoi thales apollonius panini pappus bernoulli runt"
+for h in $hosts; do
+    check_up $h 
+done
+
