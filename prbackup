@@ -5,8 +5,8 @@ This program uses the magic of rsync and hard links to do incremental
 backups of a file system.  It can be called 100000 times and will keep
 the latest 8 backups as well as one backup in the range [2^i,2^(i+1))
 for every integer i.  This means that, after running long enough, it 
-will store a total of 19 backups --- the 8 most recent plus whose age
-is between 8 and 15, one whose age is between 16 and 31, and so on.
+will store a total of 19 backups --- the 8 most recent plus one whose
+age is between 8 and 15, one whose age is between 16 and 31, and so on.
 
 This is intended to be called, say, once per day by a script in
 /etc/cron.daily.  With this usage pattern, it will work for about 
