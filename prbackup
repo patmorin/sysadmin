@@ -75,7 +75,7 @@ if __name__ == "__main__":
     dstdir = os.path.abspath(dstdir)
 
     # Find destination directory matches (previous backups).
-    (ddd,ddn) = os.path.split(dstdir)
+    (ddd, ddn) = os.path.split(dstdir)
     ddp = ddn + r'\.\d{5}$'
     dirs = [os.path.join(ddd,d) for d in os.listdir(ddd) 
                                     if re.match(ddp, d)]
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     os.rename(tmp_dst, new_dst)
 
     # We got this far, now we can do some cleaning up
-    for i in range(3, 30):
+    for i in range(3, 16):
         # We keep the most recent 8 versions and then one version
         # per power of 2 after that
         group = [d for d in dirs if in_range(d, 2**i, 2**(i+1))]
