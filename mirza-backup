@@ -1,0 +1,5 @@
+#!/bin/bash -ex
+
+rsync -av root@mirzakhani:/usr/lib/cgi-bin/2402-w2019 cgi-bin
+rsync -av root@mirzakhani:/var/www/html/2402-w2019 html
+
